@@ -1,1 +1,1 @@
-# EMR_Studio_Example
+# EMR Studio Example(s)
