@@ -1,0 +1,800 @@
+Description: EMR Studio Demo
+
+Parameters:
+  # Create EMR roles?
+  CreateEMRRoles:
+    Description: "Create the default EMR Roles - required if you've never used EMR before in your account"
+    Type: String
+    Default: true
+    AllowedValues:
+        - true
+        - false
+  # Create EMR cluster?
+  CreateEMRCluster:
+    Description: "Create an EMR Cluster that EMR Studio can attach to. This will reduce the workshop lab execution time"
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false  
+
+Conditions:
+  # Require answer to EMR roles questions
+  ShouldCreateEMRRoles:
+    Fn::Equals: 
+      ["true", Ref: CreateEMRRoles]
+  # Require answer to create EMR question
+  ShouldCreateEMRCluster:
+    Fn::Equals:
+      ["true", Ref: CreateEMRCluster]
+  
+Mappings:
+  # Subnet CIDR blocks
+  SubnetConfig:
+    VPC:   
+      "CIDR": "10.0.0.0/16"
+    Public1:
+      "CIDR": "10.0.10.0/24"
+    Public2:
+      "CIDR": "10.0.11.0/24"
+    Private1:
+      "CIDR": "10.0.20.0/24"
+    Private2:
+      "CIDR": "10.0.21.0/24"
+      
+Resources:
+  # -----------------
+  # VPC
+  # -----------------
+  EMRDevExpVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Fn::FindInMap: ["SubnetConfig", "VPC", "CIDR"]
+      InstanceTenancy: default
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-VPC
+        - Key: for-use-with-amazon-emr-managed-policies,
+          Value: true
+
+  # -----------------
+  # Internet Gateway
+  # -----------------
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-IG
+
+  # attach internet gateway to VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: 
+        Ref: EMRDevExpVPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  # -----------------
+  # Subnets
+  #
+  # a. PublicSubnet1
+  # b. PublicSubnet2
+  # c. PrivateSubnet1
+  # d. PrivateSubnet2
+  # ----------------
+
+  # -----------------
+  # a. PublicSubnet1
+  # -----------------
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock:
+          Fn::FindInMap: ["SubnetConfig", "Public1", "CIDR"]
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-PublicSubnet1
+        - Key: kubernetes.io/role/elb
+          Value: 1
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+
+  # -----------------
+  # b. PublicSubnet2
+  # -----------------
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock:
+        Fn::FindInMap: ["SubnetConfig", "Public2", "CIDR"]
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref AWS::Region
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-PublicSubnet2
+        - Key: kubernetes.io/role/elb
+          Value: 1
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+  # -----------------
+  # c. PrivateSubnet1
+  # -----------------
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock:
+        Fn::FindInMap: ["SubnetConfig", "Private1", "CIDR"]
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref AWS::Region
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-PrivateSubnet1
+        - Key: kubernetes.io/role/internal-elb
+          Value: 1
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+  # -----------------
+  # d. PrivateSubnet2
+  # -----------------
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock:
+        Fn::FindInMap: ["SubnetConfig", "Private2", "CIDR"]
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref AWS::Region
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMR-Dev-Exp-PrivateSubnet2
+        - Key: kubernetes.io/role/internal-elb
+          Value: 1
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+  # -----------------
+  # Elastic IPs
+  # -----------------
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  # -----------------
+  # NAT Gateways
+  # -----------------
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: 
+        Ref: PublicSubnet1
+      AllocationId: 
+        Fn::GetAtt: ["NATGateway1EIP", "AllocationId"]
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-NAT-Gateway1
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: 
+        Ref: PublicSubnet2
+      AllocationId: 
+        Fn::GetAtt: ["NATGateway2EIP", "AllocationId"]
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-NAT-Gateway2
+
+  # -----------------
+  # Pubic Route (Route Table, Route, Subnet Assoication ...)
+  # -----------------
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-PublicRouteTable
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      RouteTableId:
+          Ref: PublicRouteTable
+      GatewayId:
+          Ref: InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet2
+
+  # -----------------
+  # Private Route (Route Table, Route, Subnet Assoication ...)
+  # -----------------
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-PrivateRouteTable1
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      NatGatewayId:
+        Ref: NATGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      SubnetId:
+        Ref: PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: EMRDevExpVPC
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-PrivateRouteTable2
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      RouteTableId:
+        Ref: PrivateRouteTable2
+      NatGatewayId:
+        Ref: NATGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable2
+      SubnetId:
+        Ref: PrivateSubnet2
+
+  # -----------------
+  # S3 VPC Endpoint
+  # -----------------
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties: 
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "*"
+            Principal: "*"
+            Resource: "*"
+      RouteTableIds:
+        - Ref: PrivateRouteTable1
+        - Ref: PrivateRouteTable2
+        - Ref: PublicRouteTable
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId:
+        Ref: EMRDevExpVPC
+
+  # -----------------
+  # Network Security Groups
+  #
+  # a. EMRDevExpSecGroup
+  # -----------------
+  
+  # -----------------
+  # EMRDevExpSecGroup
+  # -----------------
+  EMRDevExpSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EMRDevExp-Default-SG
+      GroupDescription: Security Group for EMRDevExp-Default-SG
+      VpcId:
+        Ref: EMRDevExpVPC
+      SecurityGroupIngress:
+        IpProtocol: -1
+        CidrIp:
+          Fn::FindInMap: ["SubnetConfig", "VPC", "CIDR"]
+      Tags:
+        - Key: Name
+          Value: EMRDevExp-Default-SG
+  # Add ingress rule
+  VPCDefaultSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Fn::GetAtt: ["EMRDevExpVPC", "DefaultSecurityGroup"]
+      IpProtocol: -1
+      CidrIp:
+        Fn::FindInMap: ["SubnetConfig", "VPC", "CIDR"]
+
+  # -----------------
+  # S3 Bucket
+  # -----------------
+  EMRDevExpBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join: ["-", ["emr-dev-exp", Ref: AWS::AccountId]]
+
+
+  # -----------------
+  # IAM (role, policies ...)
+  #
+  # a. EMRAdminUser
+  # b. StudioSAMLRoleAuth0
+  # c. SCLaunchRole (role)
+  # d. EMREC2RestrictedRole (role)
+  # e. EMREC2RestrictedRole (instance profile)
+  # f. EMRClusterServiceRole (role)
+  # g. EMREKSJobExecutionRole (role)
+  # h. EMRStudioServiceRole (role)
+  # -----------------
+
+  # -----------------
+  # a. EMR Admin User
+  # -----------------
+ 
+  # -----------------
+  # b. StudioSAMLRoleAuth0
+  # -----------------
+ 
+  # -----------------
+  # c. SCLaunchRole (role)
+  # -----------------
+  SCLaunchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "EMRDevExp-SCLaunchRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                  - "elasticmapreduce.amazonaws.com"
+                  - "servicecatalog.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: SC-Launch-Role-Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "catalog-user:*"
+                  - "cloudformation:CreateStack"
+                  - "cloudformation:DeleteStack"
+                  - "cloudformation:DescribeStackEvents"
+                  - "cloudformation:DescribeStacks"
+                  - "cloudformation:GetTemplateSummary"
+                  - "cloudformation:SetStackPolicy"
+                  - "cloudformation:ValidateTemplate"
+                  - "cloudformation:UpdateStack"
+                  - "s3:GetObject"
+                  - "elasticmapreduce:*"
+                Resource: "*"
+        - PolicyName: SC-Launch-Role-Limited-IAM-Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                    - iam:PassRole
+                Resource:
+                  - Fn::GetAtt: ["EMREC2RestrictedRole", "Arn"]
+                  - Fn::GetAtt: ["EMRClusterServiceRole", "Arn"]
+                  - Fn::Join: ["", ["arn:aws:iam::", Ref: AWS::AccountId, ":role/EMR_AutoScaling_DefaultRole"]]
+                  - Fn::Join: ["", ["arn:aws:iam::", Ref: AWS::AccountId, ":role/EMR_DefaultRole"]]
+                  - Fn::Join: ["", ["arn:aws:iam::", Ref: AWS::AccountId, ":role/EMR_EC2_DefaultRole"]]
+                  
+  # -----------------
+  # d. EMREC2RestrictedRole
+  # -----------------
+  EMREC2RestrictedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "EMRDevExp-EMR_EC2_Restricted_Role"
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: EMRDevExp-EMR_EC2_Restricted_Role_Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - "s3:*"
+                Resource:
+                  - Fn::Join: ["", ["arn:aws:s3:::", Ref: EMRDevExpBucket, "/"]]
+              - Effect: Allow
+                Action:
+                  - "s3:*"
+                Resource:
+                  - Fn::Join: ["", ["arn:aws:s3:::", Ref: EMRDevExpBucket, "/*"]]                  
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                Resource:
+                  - "arn:aws:s3:::us-west-2.elasticmapreduce"
+                  - "arn:aws:s3:::amazon-reviews-pds"
+                  - "arn:aws:s3:::aws-data-analytics-blog"
+                  - "Fn::Join": ["", ["arn:aws:s3:::", Ref: EMRDevExpBucket]]
+              - Effect: Allow
+                Action: 
+                  - "s3:GetObject"
+                Resource:
+                  - arn:aws:s3:::us-west-2.elasticmapreduce/*
+                  - arn:aws:s3:::amazon-reviews-pds/*
+                  - arn:aws:s3:::aws-data-analytics-workshops/emr-dev-exp-workshop/*
+                  - Fn::Join: ["", ["arn:aws:s3:::", Ref: EMRDevExpBucket, "/*"]]
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:*"
+                  - "dynamodb:*"
+                  - "ec2:Describe*"
+                  - "elasticmapreduce:Describe*"
+                  - "elasticmapreduce:ListBootstrapActions"
+                  - "elasticmapreduce:ListClusters"
+                  - "elasticmapreduce:ListInstanceGroups"
+                  - "elasticmapreduce:ListInstances"
+                  - "elasticmapreduce:ListSteps"
+                  - "kinesis:*"
+                  - "rds:Describe*"
+                  - "sdb:*"
+                  - "sns:*"
+                  - "sqs:*"
+                  - "glue:*"
+                Resource: "*"        
+
+  # -----------------
+  # e. EMREC2RestrictedRole (instance profile)
+  # -----------------
+  EMREC2RestrictedRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: EMREC2RestrictedRole
+      InstanceProfileName: "EMRDevExp-EMR_EC2_Restricted_Role"
+
+
+  # -----------------
+  # f. EMRClusterServiceRole (role)
+  # -----------------
+  EMRClusterServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "EMRDevExp-EMRClusterServiceRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+                Service:
+                  - "elasticmapreduce.amazonaws.com"
+            Action:
+                - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole"
+      Path: "/"
+
+  # -----------------
+  # g. EMREKSJobExecutionRole (role)
+  # -----------------
+
+  # -----------------
+  # h. EMRStudioServiceRole (role)
+  # -----------------
+  EMRStudioServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EMRDevExp-EMRStudioServiceRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "elasticmapreduce.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+        Policies:
+          - PolicyName: EMRDevExp-Studio-Service-Policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: AllowEMRReadOnlyActions
+                  Effect: Allow
+                  Action:
+                    - "elasticmapreduce:ListInstances"
+                    - "elasticmapreduce:DescribeCluster"
+                    - "elasticmapreduce:ListSteps"
+                  Resource: "*"         
+                - Sid: "AllowEC2ENIActionsWithEMRTags"
+                  Effect: Allow
+                  Action:
+                    - "ec2:CreateNetworkInterfacePermission"
+                    - "ec2:DeleteNetworkInterface"
+                  Resource:
+                    - "arn:aws:ec2:*:*:network-interface/*"
+                  Condition: 
+                    StringEquals:
+                      "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+                - Sid: AllowEC2ENIAttributeAction
+                  Effect: Allow
+                  Action: 
+                    - "ec2:ModifyNetworkInterfaceAttribute"
+                  Resource:
+                    - "arn:aws:ec2:*:*:instance/*"
+                    - "arn:aws:ec2:*:*:network-interface/*"
+                    - "arn:aws:ec2:*:*:security-group/*"              
+                - Sid: "AllowEC2SecurityGroupActionsWithEMRTags"
+                  Effect: Allow
+                  Action:
+                    - "ec2:AuthorizeSecurityGroupEgress"
+                    - "ec2:AuthorizeSecurityGroupIngress"
+                    - "ec2:RevokeSecurityGroupEgress"
+                    - "ec2:RevokeSecurityGroupIngress"
+                    - "ec2:DeleteNetworkInterfacePermission"
+                  Resource: "*"
+                  Condition:
+                    StringEquals:
+                      "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"                
+                - Sid: "AllowDefaultEC2SecurityGroupsCreationWithEMRTags"
+                  Effect: Allow
+                  Action: 
+                    - ec2:CreateSecurityGroup
+                  "Resource":[
+                    "arn:aws:ec2:*:*:security-group/*"
+                  ],
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:RequestTag/for-use-with-amazon-emr-managed-policies":"true"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowDefaultEC2SecurityGroupsCreationInVPCWithEMRTags",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:CreateSecurityGroup"
+                  ],
+                  "Resource":[
+                    "arn:aws:ec2:*:*:vpc/*"
+                  ],
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:ResourceTag/for-use-with-amazon-emr-managed-policies":"true"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowAddingEMRTagsDuringDefaultSecurityGroupCreation",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:CreateTags"
+                  ],
+                  "Resource":"arn:aws:ec2:*:*:security-group/*",
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:RequestTag/for-use-with-amazon-emr-managed-policies":"true",
+                      "ec2:CreateAction":"CreateSecurityGroup"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowEC2ENICreationWithEMRTags",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:CreateNetworkInterface"
+                  ],
+                  "Resource":[
+                    "arn:aws:ec2:*:*:network-interface/*"
+                  ],
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:RequestTag/for-use-with-amazon-emr-managed-policies":"true"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowEC2ENICreationInSubnetAndSecurityGroupWithEMRTags",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:CreateNetworkInterface"
+                  ],
+                  "Resource":[
+                    "arn:aws:ec2:*:*:subnet/*",
+                    "arn:aws:ec2:*:*:security-group/*"
+                  ],
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:ResourceTag/for-use-with-amazon-emr-managed-policies":"true"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowAddingTagsDuringEC2ENICreation",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:CreateTags"
+                  ],
+                  "Resource":"arn:aws:ec2:*:*:network-interface/*",
+                  "Condition":{
+                    "StringEquals":{
+                      "ec2:CreateAction":"CreateNetworkInterface"
+                    }
+                  }
+                },
+                
+                - {
+                  "Sid":"AllowEC2ReadOnlyActions",
+                  "Effect":"Allow",
+                  "Action":[
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribeTags",
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeVpcs"
+                  ],
+                  "Resource":"*"
+                },
+                
+                - {
+                  "Sid":"AllowSecretsManagerReadOnlyActionsWithEMRTags",
+                  "Effect":"Allow",
+                  "Action":[
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource":"arn:aws:secretsmanager:*:*:secret:*",
+                  "Condition":{
+                    "StringEquals":{
+                      "aws:ResourceTag/for-use-with-amazon-emr-managed-policies":"true"
+                    }
+                  }
+                },
+                {
+                  "Effect":"Allow",
+                  "Action":[
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:GetEncryptionConfiguration",
+                    "s3:ListBucket",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource":"arn:aws:s3:::*"
+                }
+              ]
+            }
+          }
+        ],
+        "RoleName":"EMRDevExp-StudioServiceRole"
+      }
+    },
+
+
+
+
+  # -----------------
+  # Serive Catalog Portfolio
+  #
+  # a. EMRDevPortfolio
+  # b. Dev532Product
+  # c. Dev620Product
+  # d. Dev532ProductLaunchRole
+  # e. Dev620ProductLaunchRole
+  # f. Dev532ProductToPortfolio
+  # g. Dev620ProductToPortfolio
+  # h. EMRAdminToEMRDevPortfolio
+  # i. EMRStudioUserRoleToEMRDevPortfolio
+  # j. Auth0SAMLRoleToEMRDevPortfolio
+  # -----------------
+
+  # -----------------
+  # EMRDevPortfolio
+  # -----------------
+
+  # -----------------
+  # Dev532Product
+  # -----------------
+
+  # -----------------
+  # Dev620Product
+  # -----------------
+
+  # -----------------
+  # Dev532ProductLaunchRole
+  # -----------------
+
+  # -----------------
+  # Dev620ProductLaunchRole
+  # -----------------
+
+  # -----------------
+  # Dev532ProductToPortfolio
+  # -----------------
+
+  # -----------------
+  # Dev620ProductToPortfolio
+  # -----------------
+
+  # -----------------
+  # EMRAdminToEMRDevPortfolio
+  # -----------------
+
+  # -----------------
+  # EMRStudioUserRoleToEMRDevPortfolio
+  # -----------------
+
+  # -----------------
+  # Auth0SAMLRoleToEMRDevPortfolio
+  # -----------------
