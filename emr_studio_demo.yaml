@@ -1,0 +1,562 @@
+Description: EMR Studio Demo - Network
+Resources:
+
+  # -----------------
+  # 1. VPC
+  # 2. Internet Gateway
+  # 3. Subnet
+  # 4. Route Table
+  # 5. Network Security Groups
+  # 6. S3 Bucket
+  # 7. IAM Role - EMR Studio Service Role
+  # 8. IAM Role - EMR Studio User Role
+  # 9. IAM Managed Policy - Advanced User Policy
+  # 10. EMR Studio
+  # -----------------
+
+
+  # -----------------
+  # 1. VPC
+  # ----------------- 
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      Tags:
+        - Key: Name
+          Value: emr studio vpc
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+      EnableDnsSupport: True
+      EnableDnsHostnames: True
+
+  # -----------------
+  # 2. Internet Gateway
+  # -----------------
+  VPCInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: emr studio internet gateway
+  # Attach InternetGateway to VPC
+  AttachInternetGatewayVPC:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: 
+        Ref: VPCInternetGateway
+      VpcId:
+        Ref: VPC
+
+  # -----------------
+  # 3. Subnet
+  # ----------------- 
+
+  #
+  # EMR Studio Subnet
+  #
+  EMRStudioSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: '10.0.0.0/28'
+      AvailabilityZone: 'us-east-1a'
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: emr-studio-subnet | us-east-1a
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+  # -----------------
+  # 4. Route Table
+  # -----------------
+  VPCRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: workshop route table
+      VpcId: !Ref VPC
+  # add a route to the internet gateway
+  InternetGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties: 
+      RouteTableId: !Ref VPCRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref VPCInternetGateway
+
+  # associate route table with subnets
+  EMRStudioSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref VPCRouteTable
+      SubnetId: !Ref EMRStudioSubnet
+
+  # -----------------
+  # 5. Network Security Groups
+  # -----------------
+  WorkspaceSecuritySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: 'EMR studio workspace security group'
+      GroupDescription: 'EMR studio workspace security group'
+      VpcId: !Ref VPC
+      # Egress rules
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1 
+          ToPort: -1
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: 'EMR studio workspace security group'
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+
+  EngineSecuritySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: 'EMR studio engine security group'
+      GroupDescription: 'EMR studio engine security group'
+      VpcId: !Ref VPC
+      # Egress rules
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1 
+          ToPort: -1
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: 'EMR studio engine security group'
+        - Key: for-use-with-amazon-emr-managed-policies
+          Value: true
+  # add a self reference ingress rule 
+  EngineSecuritySecurityGroupIngress1:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      # Ingress rules
+      GroupId: !Ref EngineSecuritySecurityGroup
+      IpProtocol: -1
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
+  # add a ingress rule for all traffic originating from the WorkspaceSecuritySecurityGroup
+  EngineSecuritySecurityGroupIngress2:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      # Ingress rules
+      GroupId: !Ref EngineSecuritySecurityGroup
+      IpProtocol: -1
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !GetAtt WorkspaceSecuritySecurityGroup.GroupId
+
+  # -----------------
+  # 6. S3 Bucket
+  # -----------------
+  S3Bucket:
+    Type: AWS::S3::Bucket
+
+  # -----------------
+  # 7. IAM Role - EMR Studio Service Role
+  # -----------------
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: service-role-EMR-studio
+      # Trust relationships
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'elasticmapreduce.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+            Condition:
+              StringEquals: 
+                "aws:SourceAccount": !Sub "${AWS::AccountId}"
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:elasticmapreduce:${AWS::Region}:${AWS::AccountId}:*"
+      # Permissions
+      Policies:
+        - PolicyName: kms-emr-studio
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "kms:*"
+                Resource: "*"
+        - PolicyName: s3-emr-studio
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "s3:*"
+                Resource: "*"
+        - PolicyName: other-emr-studio
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              #
+              # BUG FIX ME - Scope down these premisssions
+              #
+
+              - Sid: "ChrisCustomer"
+                Effect: Allow
+                Action:
+                  - "ec2:*"
+                  #- "ec2:CreateNetworkInterface:*"
+                Resource: "*"
+              
+              #
+              #
+              #
+
+              - Sid: "AllowEMRReadOnlyActions"
+                Effect: Allow
+                Action:
+                  - "elasticmapreduce:ListInstances"
+                  - "elasticmapreduce:DescribeCluster"
+                  - "elasticmapreduce:ListSteps"
+                Resource: "*"
+              
+              - Sid: "AllowEC2ENIActionsWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateNetworkInterfacePermission"
+                  - "ec2:DeleteNetworkInterface"
+                Resource:
+                  - "arn:aws:ec2:*:*:network-interface/*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowEC2ENIAttributeAction"
+                Effect: Allow
+                Action:
+                  - "ec2:ModifyNetworkInterfaceAttribute"
+                Resource:
+                  - "arn:aws:ec2:*:*:instance/*"
+                  - "arn:aws:ec2:*:*:network-interface/*"
+                  - "arn:aws:ec2:*:*:security-group/*"
+
+              - Sid: "AllowEC2SecurityGroupActionsWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:AuthorizeSecurityGroupEgress"
+                  - "ec2:AuthorizeSecurityGroupIngress"
+                  - "ec2:RevokeSecurityGroupEgress"
+                  - "ec2:RevokeSecurityGroupIngress"
+                  - "ec2:DeleteNetworkInterfacePermission"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowDefaultEC2SecurityGroupsCreationWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateSecurityGroup"
+                Resource:
+                  - "arn:aws:ec2:*:*:security-group/*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowDefaultEC2SecurityGroupsCreationInVPCWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateSecurityGroup"
+                Resource:
+                  - "arn:aws:ec2:*:*:vpc/*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowAddingEMRTagsDuringDefaultSecurityGroupCreation"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateTags"
+                Resource:
+                  - "arn:aws:ec2:*:*:security-group/*"
+                Condition:
+                  #
+                  # BUG - FIX
+                  #
+                  #StringEquals:
+                  #  "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+                  StringEquals:
+                    "ec2:CreateAction": "CreateSecurityGroup"
+                  #
+                  #
+                  #
+
+              - Sid: "AllowEC2ENICreationWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                Resource:
+                  - "arn:aws:ec2:*:*:network-interface/*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowEC2ENICreationInSubnetAndSecurityGroupWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                Resource:
+                  - "arn:aws:ec2:*:*:subnet/*"
+                  - "arn:aws:ec2:*:*:security-group/*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowAddingTagsDuringEC2ENICreation"
+                Effect: Allow
+                Action:
+                  - "ec2:CreateTags"
+                Resource:
+                  - "arn:aws:ec2:*:*:network-interface/*"
+                Condition:
+                  StringEquals:
+                    "ec2:CreateAction": "CreateNetworkInterface"
+
+              - Sid: "AllowEC2ReadOnlyActions"
+                Effect: Allow
+                Action:
+                  - "ec2:DescribeSecurityGroups"
+                  - "ec2:DescribeNetworkInterfaces"
+                  - "ec2:DescribeTags"
+                  - "ec2:DescribeInstances"
+                  - "ec2:DescribeSubnets"
+                  - "ec2:DescribeVpcs"
+                Resource: "*"
+
+              - Sid: "AllowSecretsManagerReadOnlyActionsWithEMRTags"
+                Effect: Allow
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - "arn:aws:secretsmanager:*:*:secret:*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+              - Sid: "AllowWorkspaceCollaboration"
+                Effect: Allow
+                Action:
+                  - "iam:GetUser"
+                  - "iam:GetRole"
+                  - "iam:ListUsers"
+                  - "iam:ListRoles"
+                  - "sso:GetManagedApplicationInstance"
+                  - "sso-directory:SearchUsers"
+                Resource: "*"
+
+  # -----------------
+  # 8. IAM Role - EMR Studio User Role
+  # -----------------
+  UserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: user-role-EMR-studio
+      # Trust relationships
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'elasticmapreduce.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      # Permissions
+      Policies:
+        - PolicyName: other-emr-studio-user-role
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              
+              - Sid: "AllowAddingTagsOnSecretsWithEMRStudioPrefix"
+                Effect: Allow
+                Action:
+                  - "secretsmanager:TagResource"
+                Resource:
+                  - "arn:aws:secretsmanager:*:*:secret:emr-studio-*"
+              
+              - Sid: "AllowPassingServiceRoleForWorkspaceCreation"
+                Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - !GetAtt ServiceRole.Arn
+
+  # -----------------
+  # 9. IAM Managed Policy - EMR Studio Advanced User
+  # -----------------
+  AdvancedUserPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: advanced-user-policy-emr-studio
+      Roles:
+        - Ref: UserRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+
+          - Sid: "AllowEMRBasicActions"
+            Action:
+              - "elasticmapreduce:CreateEditor"
+              - "elasticmapreduce:DescribeEditor"
+              - "elasticmapreduce:ListEditors"
+              - "elasticmapreduce:StartEditor"
+              - "elasticmapreduce:StopEditor"
+              - "elasticmapreduce:DeleteEditor"
+              - "elasticmapreduce:OpenEditorInConsole"
+              - "elasticmapreduce:AttachEditor"
+              - "elasticmapreduce:DetachEditor"
+              - "elasticmapreduce:CreateRepository"
+              - "elasticmapreduce:DescribeRepository"
+              - "elasticmapreduce:DeleteRepository"
+              - "elasticmapreduce:ListRepositories"
+              - "elasticmapreduce:LinkRepository"
+              - "elasticmapreduce:UnlinkRepository"
+              - "elasticmapreduce:DescribeCluster"
+              - "elasticmapreduce:ListInstanceGroups"
+              - "elasticmapreduce:ListBootstrapActions"
+              - "elasticmapreduce:ListClusters"
+              - "elasticmapreduce:ListSteps"
+              - "elasticmapreduce:CreatePersistentAppUI"
+              - "elasticmapreduce:DescribePersistentAppUI"
+              - "elasticmapreduce:GetPersistentAppUIPresignedURL"
+              - "elasticmapreduce:GetOnClusterAppUIPresignedURL"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "AllowEMRContainersBasicActions"
+            Action:
+              - "emr-containers:DescribeVirtualCluster"
+              - "emr-containers:ListVirtualClusters"
+              - "emr-containers:DescribeManagedEndpoint"
+              - "emr-containers:ListManagedEndpoints"
+              - "emr-containers:CreateAccessTokenForManagedEndpoint"
+              - "emr-containers:DescribeJobRun"
+              - "emr-containers:ListJobRuns"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "AllowSecretManagerListSecrets"
+            Action:
+              - "secretsmanager:ListSecrets"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "AllowSecretCreationWithEMRTagsAndEMRStudioPrefix"
+            Action:
+              - "secretsmanager:CreateSecret"
+            Resource: 
+              - "arn:aws:secretsmanager:*:*:secret:emr-studio-*"
+            Effect: Allow
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
+
+          - Sid: "AllowAddingTagsOnSecretsWithEMRStudioPrefix"
+            Action:
+              - "secretsmanager:TagResource"
+            Resource:
+              - "arn:aws:secretsmanager:*:*:secret:emr-studio-*"
+            Effect: Allow
+
+          - Sid: "AllowClusterTemplateRelatedIntermediateActions"
+            Action:
+              - "servicecatalog:DescribeProduct"
+              - "servicecatalog:DescribeProductView"
+              - "servicecatalog:DescribeProvisioningParameters"
+              - "servicecatalog:ProvisionProduct"
+              - "servicecatalog:SearchProducts"
+              - "servicecatalog:UpdateProvisionedProduct"
+              - "servicecatalog:ListProvisioningArtifacts"
+              - "servicecatalog:ListLaunchPaths"
+              - "servicecatalog:DescribeRecord"
+              - "cloudformation:DescribeStackResources"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "AllowEMRCreateClusterAdvancedActions"
+            Action:
+              - "elasticmapreduce:RunJobFlow"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "AllowPassingServiceRoleForWorkspaceCreation"
+            Action:
+              - "iam:PassRole"
+            Resource:
+              - !GetAtt ServiceRole.Arn
+              - "arn:aws:iam::*:role/EMR_DefaultRole"
+              - "arn:aws:iam::*:role/EMR_EC2_DefaultRole"
+            Effect: Allow
+
+          - Sid: "AllowS3ListAndLocationPermissions"
+            Action:
+              - "s3:ListAllMyBuckets"
+              - "s3:ListBucket"
+              - "s3:GetBucketLocation"
+            Resource: "arn:aws:s3:::*"
+            Effect: Allow
+
+          - Sid: "AllowS3ReadOnlyAccessToLogs"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - !Sub "arn:aws:s3:::aws-logs-${AWS::AccountId}-${AWS::Region}/elasticmapreduce/*"
+            Effect: Allow
+
+          - Sid: "AllowConfigurationForWorkspaceCollaboration"
+            Action:
+              - "elasticmapreduce:UpdateEditor"
+              - "elasticmapreduce:PutWorkspaceAccess"
+              - "elasticmapreduce:DeleteWorkspaceAccess"
+              - "elasticmapreduce:ListWorkspaceAccessIdentities"
+            Resource: "*"
+            Effect: Allow
+            Condition:
+              StringEquals:
+                "elasticmapreduce:ResourceTag/creatorUserId": "${aws:userId}"
+
+          - Sid: "DescribeNetwork"
+            Action:
+              - "ec2:DescribeVpcs"
+              - "ec2:DescribeSubnets"
+              - "ec2:DescribeSecurityGroups"
+            Resource: "*"
+            Effect: Allow
+
+          - Sid: "ListIAMRoles"
+            Action:
+              - "iam:ListRoles"
+            Resource: "*"
+            Effect: Allow
+
+  # -----------------
+  # 10. IAM Managed Policy - EMR Studio Advanced User
+  # -----------------
+  EMRStudio:
+    Type: AWS::EMR::Studio
+    Properties:
+      Name: EMR-Studio-Demo
+      VpcId:
+        Ref: VPC
+      SubnetIds:
+        - !Ref EMRStudioSubnet
+      WorkspaceSecurityGroupId: !GetAtt WorkspaceSecuritySecurityGroup.GroupId
+      EngineSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
+      AuthMode: "SSO"
+      ServiceRole: !GetAtt ServiceRole.Arn
+      UserRole: !GetAtt UserRole.Arn
+      DefaultS3Location: !Join ["", ["s3://", !Ref S3Bucket]]
