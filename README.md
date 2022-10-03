@@ -34,7 +34,7 @@ The resources created by the CloudFormation stack are documented in the architec
 
 6. Log into EMR studio
 
-## Create Default EMR Role
+## Create Default EMR Roles
 
 If you have never created a EMR cluster in your account before you may not have the *EMR_DefaultRole* and *EMR_EC2_DefaultRole* roles. To create these you can execute the following aws CLI command. 
 
