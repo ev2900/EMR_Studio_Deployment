@@ -34,7 +34,10 @@ The resources created by the CloudFormation stack are documented in the architec
 
 6. Log into EMR studio
 
-## Future Improvements Planned for this Repository
-* Include basic user policy in CloudFormation stack
-* Include intermediate user policy in CloudFormation stack
-* Further scope down the premissions in the Cloudformation IAM resources
+## Create Default EMR Role
+
+If you have never created a EMR cluster in your account before you may not have the *EMR_DefaultRole* and *EMR_EC2_DefaultRole* roles. To create these you can execute the following aws CLI command. 
+
+If you don't have the AWS CLI set up locally you can run this command via. CloudShell
+
+```aws emr create-default-roles```
