@@ -47,3 +47,5 @@ You may also need to create the *AWSServiceRoleForEMRCleanup* if you do not alre
 * Go to [IAM Console Page](https://us-east-1.console.aws.amazon.com/iamv2/home?region=us-east-1#/roles)
 * Click on roles, create role, AWS service, EMR, **EMR - Clean Up**
 * Click through the prompts and create the role
+
+These roles (*EMR_DefaultRole*, *EMR_EC2_DefaultRole*, *AWSServiceRoleForEMRCleanup*) are required for users to create EMR clusters via. EMR studio
