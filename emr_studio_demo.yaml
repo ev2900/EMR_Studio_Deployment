@@ -204,7 +204,7 @@ Resources:
               # BUG FIX ME - Scope down these premisssions
               #
 
-              - Sid: "ChrisCustomer"
+              - Sid: "EC2CreateNetworkinterface"
                 Effect: Allow
                 Action:
                   - "ec2:*"
