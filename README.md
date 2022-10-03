@@ -33,3 +33,8 @@ The resources created by the CloudFormation stack are documented in the architec
 * Apply the *advanced-user-policy-emr-studio* to the user
 
 6. Log into EMR studio
+
+## Future Improvements Planned for this Repository
+* Include basic user policy in CloudFormation stack
+* Include intermediate user policy in CloudFormation stack
+* Further scope down the premissions in the Cloudformation IAM resources
