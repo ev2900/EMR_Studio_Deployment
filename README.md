@@ -10,7 +10,7 @@ Go to [IAM Identity Center (successor to AWS Single Sign-On)](https://us-east-1.
 
 2. Run the CloudFormation stack. It will create the required resources required for this example
 
-[![Launch CloudFormation Stack](https://sharkech-public.s3.amazonaws.com/misc-public/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=fluentd-demo&templateURL=https://sharkech-public.s3.amazonaws.com/misc-public/fluentd_cloud9.yml)
+[![Launch CloudFormation Stack](https://sharkech-public.s3.amazonaws.com/misc-public/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=dynamo-lambda-opensearch&templateURL=https://sharkech-public.s3.amazonaws.com/misc-public/emr_studio_demo.yaml)
 
 The resources created by the CloudFormation stack are documented in the architecture below
 
