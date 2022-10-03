@@ -41,3 +41,9 @@ If you have never created a EMR cluster in your account before you may not have 
 If you don't have the AWS CLI set up locally you can run this command via. CloudShell
 
 ```aws emr create-default-roles```
+
+You may also need to create the *AWSServiceRoleForEMRCleanup* if you do not already have this role created. To create this role 
+
+* Go to [IAM Console Page](https://us-east-1.console.aws.amazon.com/iamv2/home?region=us-east-1#/roles)
+* Click on roles, create role, AWS service, EMR, **EMR - Clean Up**
+* Click through the prompts and create the role
