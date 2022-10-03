@@ -107,6 +107,10 @@ Resources:
           FromPort: -1 
           ToPort: -1
           CidrIp: '0.0.0.0/0'
+        - IpProtocol: -1
+          FromPort: -1 
+          ToPort: -1
+          SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
       Tags:
         - Key: Name
           Value: 'EMR studio workspace security group'
