@@ -14,4 +14,3 @@ Go to [IAM Identity Center (successor to AWS Single Sign-On)](https://us-east-1.
 
 The resources created by the CloudFormation stack are documented in the architecture below
 
-[IMG]
