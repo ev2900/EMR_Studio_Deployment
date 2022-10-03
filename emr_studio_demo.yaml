@@ -542,6 +542,12 @@ Resources:
               - "iam:ListRoles"
             Resource: "*"
             Effect: Allow
+          
+          - Sid: "ListEMRServerless"
+            Action:
+              - "emr-serverless:ListApplications"
+            Resource: "*"
+            Effect: Allow
 
   # -----------------
   # 10. IAM Managed Policy - EMR Studio Advanced User
