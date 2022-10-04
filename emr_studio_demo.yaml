@@ -111,12 +111,12 @@ Resources:
           FromPort: -1 
           ToPort: -1
           SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
-        # ?
+        # Is this needed ?
         - IpProtocol: tcp
           FromPort: 18888
           ToPort: 18888
           SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
-        # ?
+        # Is this needed ?
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
@@ -164,7 +164,7 @@ Resources:
       FromPort: -1
       ToPort: -1
       SourceSecurityGroupId: !GetAtt WorkspaceSecuritySecurityGroup.GroupId
-  # ?
+  # Is this needed ?
   EngineSecuritySecurityGroupIngress3:
     Type: 'AWS::EC2::SecurityGroupIngress'
     Properties:
@@ -224,10 +224,7 @@ Resources:
             Version: "2012-10-17"
             Statement:
 
-              #
-              # BUG FIX ME - Scope down these premisssions
-              #
-
+              # This premissions should not be needed according to the AWS docs, but I am getting error with out it. It should be scoped down ... or removed
               - Sid: "EC2CreateNetworkinterface"
                 Effect: Allow
                 Action:
@@ -235,10 +232,6 @@ Resources:
                   #- "ec2:CreateNetworkInterface:*"
                 Resource: "*"
               
-              #
-              #
-              #
-
               - Sid: "AllowEMRReadOnlyActions"
                 Effect: Allow
                 Action:
@@ -307,16 +300,11 @@ Resources:
                 Resource:
                   - "arn:aws:ec2:*:*:security-group/*"
                 Condition:
-                  #
-                  # BUG - FIX
-                  #
+                  # According to the AWS documentation this should have both conditions but CloudFormation is giving me trouble and will only accept one
                   #StringEquals:
                   #  "aws:ResourceTag/for-use-with-amazon-emr-managed-policies": "true"
                   StringEquals:
                     "ec2:CreateAction": "CreateSecurityGroup"
-                  #
-                  #
-                  #
 
               - Sid: "AllowEC2ENICreationWithEMRTags"
                 Effect: Allow
