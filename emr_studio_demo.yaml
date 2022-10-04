@@ -111,6 +111,16 @@ Resources:
           FromPort: -1 
           ToPort: -1
           SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
+        # ?
+        - IpProtocol: tcp
+          FromPort: 18888
+          ToPort: 18888
+          SourceSecurityGroupId: !GetAtt EngineSecuritySecurityGroup.GroupId
+        # ?
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
           Value: 'EMR studio workspace security group'
@@ -153,6 +163,16 @@ Resources:
       IpProtocol: -1
       FromPort: -1
       ToPort: -1
+      SourceSecurityGroupId: !GetAtt WorkspaceSecuritySecurityGroup.GroupId
+  # ?
+  EngineSecuritySecurityGroupIngress3:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      # Ingress rules
+      GroupId: !Ref EngineSecuritySecurityGroup
+      IpProtocol: tcp
+      FromPort: 18888
+      ToPort: 18888
       SourceSecurityGroupId: !GetAtt WorkspaceSecuritySecurityGroup.GroupId
 
   # -----------------
