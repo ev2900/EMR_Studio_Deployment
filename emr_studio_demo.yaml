@@ -560,6 +560,13 @@ Resources:
               - "emr-serverless:ListApplications"
             Resource: "*"
             Effect: Allow
+         
+         # Can this premission be scoped down?
+          - Sid: "EMRServerlessAll"
+            Action:
+              - "emr-serverless:*"
+            Resource: "*"
+            Effect: "Allow"
 
   # -----------------
   # 10. IAM Managed Policy - EMR Studio Advanced User
