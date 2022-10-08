@@ -49,3 +49,6 @@ You may also need to create the *AWSServiceRoleForEMRCleanup* if you do not alre
 * Click through the prompts and create the role
 
 These roles (*EMR_DefaultRole*, *EMR_EC2_DefaultRole*, *AWSServiceRoleForEMRCleanup*) are required for users to create EMR clusters via. EMR studio
+
+## Future Imporvement to this Repo
+* Service catalog intergration
