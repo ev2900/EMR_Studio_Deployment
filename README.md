@@ -1,5 +1,7 @@
 # EMR Studio CloudFormation Deployment
 
+<img width="85" alt="map-user" src="https://img.shields.io/badge/views-0000-green"> <img width="125" alt="map-user" src="https://img.shields.io/badge/unique visits-0000-green">
+
 The instructions below show you how to deploy and set EMR Studio with single sign on (SSO).
 
 1. Enable SSO for your AWS account, if it is now already enabled
