@@ -1,6 +1,6 @@
 # EMR Studio CloudFormation Deployment
 
-<img width="275" alt="map-user" src="https://img.shields.io/badge/cloudformation template deployments-4-blue"> <img width="85" alt="map-user" src="https://img.shields.io/badge/views-164-green"> <img width="125" alt="map-user" src="https://img.shields.io/badge/unique visits-054-green">
+<img width="275" alt="map-user" src="https://img.shields.io/badge/cloudformation template deployments-4-blue"> <img width="85" alt="map-user" src="https://img.shields.io/badge/views-164-green"> <img width="125" alt="map-user" src="https://img.shields.io/badge/unique visits-056-green">
 
 The instructions below show you how to deploy and set EMR Studio with single sign on (SSO).
 
